@@ -1,0 +1,24 @@
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Local/generated data (rebuildable)
+index.sqlite
+*.sqlite
+*.sqlite3
+*.db
+part-*
