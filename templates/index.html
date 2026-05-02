@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
 
@@ -11,6 +17,7 @@
     <main class="page">
       <section class="card" aria-label="Search">
         <h1 class="brand" aria-label="Home">Search</h1>
+        <p class="tagline">Fast, clean results from your Hadoop index.</p>
 
         <form class="search" action="/" method="get" role="search">
           <label class="sr-only" for="q">Search</label>
@@ -25,15 +32,19 @@
             required
           />
           <button class="search__button" type="submit">Search</button>
+          <button class="search__button search__button--voice" type="button" id="voice-button" aria-pressed="false">
+            Voice
+          </button>
         </form>
+        <div class="voice-status" id="voice-status" aria-live="polite"></div>
 
         <section class="results" aria-live="polite" aria-label="Results">
           <div class="results__meta" id="results-meta"></div>
           <ol class="results__list" id="results-list"></ol>
-          <div id="results-pager" hidden style="display: flex; gap: 8px; margin-top: 12px; align-items: center;">
-            <button class="search__button" type="button" id="prev-page">Previous</button>
+          <div id="results-pager" class="results__pager" hidden>
+            <button class="search__button search__button--ghost" type="button" id="prev-page">Previous</button>
             <div class="results__meta" id="page-meta"></div>
-            <button class="search__button" type="button" id="next-page">Next</button>
+            <button class="search__button search__button--ghost" type="button" id="next-page">Next</button>
           </div>
         </section>
       </section>
@@ -49,6 +60,8 @@
         const prevBtn = document.getElementById('prev-page');
         const nextBtn = document.getElementById('next-page');
         const pageMeta = document.getElementById('page-meta');
+        const voiceBtn = document.getElementById('voice-button');
+        const voiceStatus = document.getElementById('voice-status');
 
         let currentQuery = '';
         let currentPage = 1;
@@ -56,6 +69,10 @@
 
         function setMeta(text) {
           meta.textContent = text;
+        }
+
+        function setVoiceStatus(text) {
+          voiceStatus.textContent = text;
         }
 
         function clearList() {
@@ -136,6 +153,61 @@
           nextUrl.searchParams.set('q', q);
           nextUrl.searchParams.set('page', String(page));
           window.history.replaceState({}, '', nextUrl);
+        }
+
+        function setupVoiceSearch() {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRecognition) {
+            voiceBtn.disabled = true;
+            voiceBtn.title = 'Voice search is not supported in this browser.';
+            return null;
+          }
+
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'en-US';
+          recognition.interimResults = false;
+          recognition.maxAlternatives = 1;
+
+          recognition.onstart = () => {
+            voiceBtn.setAttribute('aria-pressed', 'true');
+            voiceBtn.textContent = 'Listening...';
+            setVoiceStatus('Listening. Speak your query.');
+          };
+
+          recognition.onend = () => {
+            voiceBtn.setAttribute('aria-pressed', 'false');
+            voiceBtn.textContent = 'Voice';
+            setVoiceStatus('');
+          };
+
+          recognition.onerror = () => {
+            setVoiceStatus('Voice input failed.');
+          };
+
+          recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            input.value = transcript;
+            updateUrl(transcript, 1);
+            search(transcript, 1).catch((err) => {
+              setMeta('Error searching (check server + DB).');
+              clearList();
+              console.error(err);
+            });
+          };
+
+          return recognition;
+        }
+
+        const recognition = setupVoiceSearch();
+        if (recognition) {
+          voiceBtn.addEventListener('click', () => {
+            try {
+              recognition.start();
+            } catch (err) {
+              setVoiceStatus('Voice input failed.');
+              console.error(err);
+            }
+          });
         }
 
         form.addEventListener('submit', async (e) => {
