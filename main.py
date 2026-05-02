@@ -1,5 +1,4 @@
 import sqlite3
-import json
 from pathlib import Path
 from functools import lru_cache
 from fastapi import FastAPI, Request, Query
@@ -70,8 +69,6 @@ def api_search(q: str = Query(...), page: int = Query(1, ge=1)):
     if not tokens:
         return {"results": [], "total_pages": 0}
 
-    cache_key = (tuple(tokens), page)
-    
     results, total_count = search_index_with_pagination(tuple(tokens), per_page, offset)
     
     import math
