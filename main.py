@@ -10,6 +10,8 @@ APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "index.sqlite"
 templates = Jinja2Templates(directory="templates")
 
+MIN_TERM_LENGTH = 3
+
 app = FastAPI(title="Simple Search Engine")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -65,7 +67,7 @@ def api_search(q: str = Query(...), page: int = Query(1, ge=1)):
     per_page = 10  
     offset = (page - 1) * per_page
     
-    tokens = sorted(list(set(q.lower().split())))
+    tokens = sorted(list(set(t for t in q.casefold().split() if len(t) >= MIN_TERM_LENGTH)))
     if not tokens:
         return {"results": [], "total_pages": 0}
 

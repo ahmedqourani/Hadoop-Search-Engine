@@ -113,7 +113,18 @@ def _parse_postings(postings: str, *, strict: bool, context: str) -> Iterator[Tu
         yield file_key, count
 
 
-def iter_records(input_paths: Iterable[str], *, strict: bool) -> Iterator[Tuple[str, str, int]]:
+def _normalize_term(term: str, *, min_term_length: int) -> str | None:
+    term = term.strip().casefold()
+    if not term:
+        return None
+    if len(term) < min_term_length:
+        return None
+    return term
+
+
+def iter_records(
+    input_paths: Iterable[str], *, strict: bool, min_term_length: int
+) -> Iterator[Tuple[str, str, int]]:
     for path in input_paths:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             for line_no, line in enumerate(f, 1):
@@ -124,7 +135,7 @@ def iter_records(input_paths: Iterable[str], *, strict: bool) -> Iterator[Tuple[
                     term, postings = line.split("\t", 1)
                 except ValueError:
                     raise ValueError(f"{path}:{line_no}: Expected a tab-separated line")
-                term = term.strip()
+                term = _normalize_term(term, min_term_length=min_term_length)
                 if not term:
                     continue
                 context = f"{path}:{line_no} (term={term!r})"
@@ -166,7 +177,13 @@ def _init_db(conn: sqlite3.Connection) -> None:
     )
 
 
-def build_index(input_paths: list[str], output_path: str, *, strict: bool) -> None:
+def build_index(
+    input_paths: list[str],
+    output_path: str,
+    *,
+    strict: bool,
+    min_term_length: int,
+) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
 
     conn = sqlite3.connect(output_path)
@@ -203,7 +220,11 @@ def build_index(input_paths: list[str], output_path: str, *, strict: bool) -> No
 
         inserted = 0
         conn.execute("BEGIN")
-        for term, raw_key, count in iter_records(input_paths, strict=strict):
+        for term, raw_key, count in iter_records(
+            input_paths,
+            strict=strict,
+            min_term_length=min_term_length,
+        ):
             term_id = get_term_id(term)
             file_id = get_file_id(raw_key)
             cur.execute(
@@ -292,6 +313,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--query", help="If set, query this term instead of building")
     parser.add_argument("--limit", type=int, default=50, help="Max rows to print for --query")
     parser.add_argument(
+        "--min-term-length",
+        type=int,
+        default=3,
+        help="Skip terms shorter than this length",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Fail fast on malformed input instead of skipping bad postings",
@@ -307,7 +334,12 @@ def main(argv: list[str]) -> int:
 
     inputs = args.input or ["part-*"]
     input_paths = _expand_inputs(inputs)
-    build_index(input_paths, args.output, strict=args.strict)
+    build_index(
+        input_paths,
+        args.output,
+        strict=args.strict,
+        min_term_length=args.min_term_length,
+    )
     return 0
 
 
